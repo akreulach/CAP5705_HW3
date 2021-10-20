@@ -2,6 +2,8 @@
 #include <GL/glew.h>
 #define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>
 #include <fstream>
@@ -15,6 +17,23 @@ void processInput(GLFWwindow *window);
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
+
+//MVP matrices
+glm::mat4 Projection = glm::mat4(1.0);
+glm::mat4 View = glm::mat4(1.0);
+glm::mat4 Model = glm::mat4(1.0);
+
+//Some constants I can't be bothered to not hack
+glm::vec3 position = glm::vec3(0,0,5);
+float scale = 1.0f;
+float rate = 0.3f;
+float angle = 0.0f;
+float angle2 = 0.0f;
+float horizontalAngle = 3.14f;
+float verticalAngle = 0.0f;
+float initialFoV = 45.0f;
+float speed = 3.0f;
+float mouseSpeed = 0.05f;
 
 int main()
 {
@@ -225,6 +244,10 @@ int main()
     // VAOs requires a call to glBindVertexArray anyways so we generally don't unbind VAOs (nor VBOs) when it's not directly necessary.
     glBindVertexArray(0); 
 
+    
+    glEnable(GL_DEPTH_TEST);
+    glDepthFunc(GL_LESS);
+    GLuint MatrixID = glGetUniformLocation(shaderProgram, "MVP");
 
     // uncomment this call to draw in wireframe polygons.
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -236,12 +259,14 @@ int main()
         // input
         // -----
         processInput(window);
-
+        glm::mat4 MVP = Projection * View * Model;
+        
         // render
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
+        
         // draw our first triangle
         glUseProgram(shaderProgram);
         glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
@@ -273,6 +298,75 @@ void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    
+    static double lastTime = glfwGetTime();
+    double currentTime = glfwGetTime();
+    float deltaTime = float(currentTime - lastTime);
+    lastTime = currentTime;
+    
+    //Orientation
+    double xpos, ypos;
+    glfwGetCursorPos(window,&xpos,&ypos);
+    
+    glfwSetCursorPos(window,SCR_WIDTH/2, SCR_HEIGHT/2);
+    
+    //horizontalAngle += mouseSpeed * deltaTime * float(SCR_WIDTH/2 - xpos);
+    //verticalAngle += mouseSpeed * deltaTime * float(SCR_HEIGHT/2 - ypos);
+    angle += mouseSpeed * deltaTime * float(SCR_WIDTH/2 - xpos);
+    angle2 -= mouseSpeed * deltaTime * float(SCR_HEIGHT/2 - ypos);
+    
+    
+    glm::vec3 direction(
+        cos(verticalAngle) * sin(horizontalAngle),
+        sin(verticalAngle),
+        cos(verticalAngle) * cos(horizontalAngle)
+    );
+    
+    glm::vec3 right = glm::vec3(
+        sin(horizontalAngle - 3.14f/2.0f),
+        0,
+        cos(horizontalAngle - 3.14f/2.0f)
+    );
+    
+    glm::vec3 up = glm::cross(right, direction);
+    
+    //Scaling
+    if(glfwGetKey(window,GLFW_KEY_UP) == GLFW_PRESS)
+    {
+        //position += direction * deltaTime * speed;
+        scale += rate * deltaTime;
+    }
+    
+    if(glfwGetKey(window,GLFW_KEY_DOWN) == GLFW_PRESS)
+    {
+        //position -= direction * deltaTime * speed;
+        scale -= rate * deltaTime;
+    }
+    
+    //Incomprehensible rotation
+    //if(glfwGetKey(window,GLFW_KEY_RIGHT) == GLFW_PRESS)
+    //{
+    //    angle += rate * deltaTime * speed;
+    //}
+    //
+    //if(glfwGetKey(window,GLFW_KEY_LEFT) == GLFW_PRESS)
+    //{
+    //    angle -= rate * deltaTime * speed;
+    //}
+    
+    //FoV
+    float FoV = initialFoV;// - 5 * glfwGetMouseWheel(window); Function broken?
+    
+    //Calculate the matrices
+    Model = glm::mat4(scale);
+    Model[3][3] = 1.0f;
+    
+    Model = glm::rotate(Model,angle,glm::vec3(0.0f,1.0f,0.0f));
+    Model = glm::rotate(Model,angle2,glm::vec3(1.0f,0.0f,0.0f));
+    
+    Projection = glm::perspective(glm::radians(FoV), 4.0f /3.0f, 0.1f, 100.0f);
+    
+    View = glm::lookAt(position,position+direction,up);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
