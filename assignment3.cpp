@@ -38,6 +38,8 @@ float mouseSpeed = 0.05f;
 unsigned int shaderProgram;
 int shade = 0;
 
+glm::vec3 lightPos(1.2f,1.0f,2.0f);
+
 int main()
 {
     // glfw: initialize and configure
@@ -133,46 +135,47 @@ int main()
             vertexIndices.push_back(vertexIndex[0]-1);
             vertexIndices.push_back(vertexIndex[1]-1);
             vertexIndices.push_back(vertexIndex[2]-1);
-            uvIndices    .push_back(uvIndex[0]);
-            uvIndices    .push_back(uvIndex[1]);
-            uvIndices    .push_back(uvIndex[2]);
-            normalIndices.push_back(normalIndex[0]);
-            normalIndices.push_back(normalIndex[1]);
-            normalIndices.push_back(normalIndex[2]);
+            uvIndices    .push_back(uvIndex[0]-1);
+            uvIndices    .push_back(uvIndex[1]-1);
+            uvIndices    .push_back(uvIndex[2]-1);
+            normalIndices.push_back(normalIndex[0]-1);
+            normalIndices.push_back(normalIndex[1]-1);
+            normalIndices.push_back(normalIndex[2]-1);
         }
     }
     
+    //Handle vertices from vector to float
     float vertices[temp_vertices.size()];
     for(int i = 0; i < temp_vertices.size(); i++){
         if((i%6) < 3)
             vertices[i] = temp_vertices[i]/2;
         else
             vertices[i] = temp_vertices[i];
-        //std::cout << vertices[i] << " ";
-        //if(((i+1) % 6) == 0)
-        //   std::cout << "\n";
     }   
     unsigned int indices[vertexIndices.size()];
     for(int i = 0; i < vertexIndices.size(); i++){
         indices[i] = vertexIndices[i];
-        //std::cout << indices[i] << " ";
-        //if(((i+1) % 3) == 0)
-        //    std::cout << "\n";
     }
-    //std::cout << "\n";
+    //Handle normals from vector to float
+    //Note, normals have the same indices as vectors in cube.obj
+    float normals[temp_normals.size()];
+    for(int i = 0; i < temp_normals.size(); i++){
+        normals[i] = temp_normals[i];
+    }
     
-    //Rotate the cube
+    
+    //Rotate the cube, outdated because we rotate by hand now
     //cos(pi/4) = 0.707
     //sin(pi/4) = 0.707
     //Rotate pi/4 in x and y
     // 0.707 0 0.707
     // 0.5 0.707 -0.5
     // -0.5 0.707 0.5
-    for(int i = 0; i < temp_vertices.size()/6; i++){
-        vertices[i*6]   = 0.707 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+2]/2;
-        vertices[i*6+1] = 0.5 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+1]/2 - 0.5 * temp_vertices[i*6+2]/2;
-        vertices[i*6+2] = -0.5 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+1]/2 + 0.5 * temp_vertices[i*6+2]/2;
-    }
+    //for(int i = 0; i < temp_vertices.size()/6; i++){
+    //    vertices[i*6]   = 0.707 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+2]/2;
+    ///    vertices[i*6+1] = 0.5 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+1]/2 - 0.5 * temp_vertices[i*6+2]/2;
+    //    vertices[i*6+2] = -0.5 * temp_vertices[i*6]/2 + 0.707 * temp_vertices[i*6+1]/2 + 0.5 * temp_vertices[i*6+2]/2;
+    //}
     
     unsigned int numVertices = sizeof(vertices)/6;
 
