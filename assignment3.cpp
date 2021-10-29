@@ -13,7 +13,7 @@
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
-void setShaders(std::string src);
+void setShaders(std::string src,unsigned int index);
 
 // settings
 const unsigned int SCR_WIDTH = 800;
@@ -24,7 +24,6 @@ glm::mat4 Projection = glm::mat4(1.0);
 glm::mat4 View = glm::mat4(1.0);
 glm::mat4 Model = glm::mat4(1.0);
 
-//Some constants I can't be bothered to not hack
 glm::vec3 position = glm::vec3(0,0,5);
 float scale = 1.0f;
 float rate = 0.3f;
@@ -35,10 +34,12 @@ float verticalAngle = 0.0f;
 float initialFoV = 45.0f;
 float speed = 3.0f;
 float mouseSpeed = 0.05f;
-unsigned int shaderProgram;
 int shade = 0;
+unsigned int shaders[4];
+unsigned int shaderProgram;
 
-glm::vec3 lightPos(1.2f,1.0f,2.0f);
+glm::vec3 lightPos(1.0f,1.0f,-1.0f);
+glm::vec3 lightColor(1.0f,1.0f,1.0f);
 
 int main()
 {
@@ -75,9 +76,13 @@ int main()
     
     //File io
     //Read shaders
-    std::string src = "source";
-    setShaders(src);
+    setShaders("source",0);
+    setShaders("sourceZ",1);
+    setShaders("phong",2);
+    setShaders("gouraud",3);
 
+    shaderProgram = shaders[shade];
+    
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     std::vector< unsigned int > vertexIndices, uvIndices, normalIndices;
@@ -145,12 +150,18 @@ int main()
     }
     
     //Handle vertices from vector to float
-    float vertices[temp_vertices.size()];
-    for(int i = 0; i < temp_vertices.size(); i++){
-        if((i%6) < 3)
-            vertices[i] = temp_vertices[i]/2;
+    float vertices[temp_vertices.size() + temp_normals.size()];
+    int step = -1;
+    for(int i = 0; i < temp_vertices.size() + temp_normals.size(); i++){
+        if(i%9 == 0)
+            step++;
+        
+        if((i%9) < 3)
+            vertices[i] = temp_vertices[step*6 + (i%9)]/2;
+        else if((i%9) < 6)
+            vertices[i] = temp_vertices[step*6 + (i%9)];
         else
-            vertices[i] = temp_vertices[i];
+            vertices[i] = temp_normals[step*3 + (i%9-6)];
     }   
     unsigned int indices[vertexIndices.size()];
     for(int i = 0; i < vertexIndices.size(); i++){
@@ -162,7 +173,6 @@ int main()
     for(int i = 0; i < temp_normals.size(); i++){
         normals[i] = temp_normals[i];
     }
-    
     
     //Rotate the cube, outdated because we rotate by hand now
     //cos(pi/4) = 0.707
@@ -194,11 +204,14 @@ int main()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
     
     // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     // color attribute
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(3* sizeof(float)));
     glEnableVertexAttribArray(1);
+    // normal attribute?
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float), (void*)(6* sizeof(float)));
+    glEnableVertexAttribArray(2);
     
 
     // note that this is allowed, the call to glVertexAttribPointer registered VBO as the vertex attribute's bound vertex buffer object so afterwards we can safely unbind
@@ -211,8 +224,7 @@ int main()
     
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    GLuint MatrixID = glGetUniformLocation(shaderProgram, "MVP");
-
+    
     // uncomment this call to draw in wireframe polygons.
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
@@ -229,10 +241,24 @@ int main()
         // ------
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glUniformMatrix4fv(MatrixID, 1, GL_FALSE, &MVP[0][0]);
         
+        if(shade < 2)
+        {
+            glUniformMatrix4fv(glGetUniformLocation(shaders[shade], "MVP"), 1, GL_FALSE, &MVP[0][0]);
+        }
+        if(shade > 1)
+        {
+            glUniformMatrix4fv(glGetUniformLocation(shaders[shade], "Model"), 1, GL_FALSE, &Model[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(shaders[shade], "View"), 1, GL_FALSE, &View[0][0]);
+            glUniformMatrix4fv(glGetUniformLocation(shaders[shade], "Projection"), 1, GL_FALSE, &Projection[0][0]);
+            
+            glUniform3fv(glGetUniformLocation(shaders[shade],"lightPos"), 1, &lightPos[0]);
+            glUniform3fv(glGetUniformLocation(shaders[shade],"viewPos"), 1, &position[0]);
+            glUniform3fv(glGetUniformLocation(shaders[shade],"lightColor"), 1, &lightColor[0]);
+        }
+    
         // draw our first triangle
-        glUseProgram(shaderProgram);
+        glUseProgram(shaders[shade]);
         glBindVertexArray(VAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
         glDrawElements(GL_TRIANGLES, vertexIndices.size(), GL_UNSIGNED_INT, 0);
         // glBindVertexArray(0); // unbind our VA no need to unbind it every time 
@@ -309,35 +335,19 @@ void processInput(GLFWwindow *window)
     
     if(glfwGetKey(window,GLFW_KEY_Z) == GLFW_PRESS)
     {
-        if(shade != 1)
-        {
-            setShaders("sourceZ");
-            shade = 1;
-        }
+        shade = 0;
     }
     if(glfwGetKey(window,GLFW_KEY_X) == GLFW_PRESS)
     {
-        if(shade != 0)
-        {
-            setShaders("source");
-            shade = 0;
-        }
+        shade = 1;
     }
     if(glfwGetKey(window,GLFW_KEY_C) == GLFW_PRESS)
     {
-        if(shade != 2)
-        {
-            setShaders("gouraud");
-            shade = 2;
-        }
+        shade = 2;
     }
     if(glfwGetKey(window,GLFW_KEY_V) == GLFW_PRESS)
     {
-        if(shade != 3)
-        {
-            setShaders("phong");
-            shade = 3;
-        }
+        shade = 3;
     }
     
     //Incomprehensible rotation
@@ -387,9 +397,9 @@ unsigned int* readIndices(std::string s)
     return p;
 }
 
-void setShaders(std::string src)
+void setShaders(std::string src, unsigned int index)
 {
-    shaderProgram = glCreateProgram();
+    unsigned int shaderProgram = glCreateProgram();
     std::ifstream in(src + ".vs");
     std::string contents((std::istreambuf_iterator<char>(in)),
                          std::istreambuf_iterator<char>());
@@ -434,4 +444,6 @@ void setShaders(std::string src)
     }
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
+    
+    shaders[index] = shaderProgram;
 }
